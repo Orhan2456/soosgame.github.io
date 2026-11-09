@@ -1,0 +1,612 @@
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Soos! Game</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: #101827;
+    color: white;
+    font-family: Arial, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.game {
+    width: 100%;
+    max-width: 430px;
+    padding: 25px;
+    text-align: center;
+}
+
+h1 {
+    font-size: 48px;
+    margin: 0;
+    letter-spacing: 2px;
+}
+
+.subtitle {
+    color: #94a3b8;
+    margin-bottom: 25px;
+}
+
+.settings {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+select {
+    flex: 1;
+    min-width: 0;
+    padding: 12px;
+    border-radius: 10px;
+    background: #1e293b;
+    color: white;
+    border: 1px solid #334155;
+    font-size: 14px;
+}
+
+.scoreboard {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.score {
+    flex: 1;
+    background: #1e293b;
+    padding: 15px;
+    border-radius: 15px;
+}
+
+.score h2 {
+    margin: 5px;
+    font-size: 35px;
+}
+
+.score p {
+    margin: 5px;
+    color: #cbd5e1;
+}
+
+.x {
+    color: #38bdf8;
+}
+
+.o {
+    color: #fb7185;
+}
+
+.status {
+    background: #1e293b;
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+.board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    width: 100%;
+    max-width: 330px;
+    margin: 0 auto 25px;
+}
+
+.cell {
+    aspect-ratio: 1;
+    background: #263449;
+    border: none;
+    border-radius: 15px;
+    color: white;
+    font-size: clamp(38px, 12vw, 58px);
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.15s;
+}
+
+.cell:active {
+    transform: scale(0.94);
+}
+
+.cell.x {
+    color: #38bdf8;
+}
+
+.cell.o {
+    color: #fb7185;
+}
+
+.cell.win {
+    background: #166534;
+}
+
+button.action {
+    width: 100%;
+    padding: 16px;
+    border: none;
+    border-radius: 12px;
+    background: #2563eb;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-bottom: 10px;
+}
+
+button.secondary {
+    background: #334155;
+}
+
+.footer {
+    color: #64748b;
+    font-size: 12px;
+    margin-top: 20px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="game">
+
+    <h1>Soos! Game</h1>
+    <p class="subtitle">Tic Tac Toe</p>
+
+    <div class="settings">
+        <select id="mode">
+            <option value="computer">Bilgisayara Karşı</option>
+            <option value="friend">İki Kişilik</option>
+        </select>
+
+        <select id="difficulty">
+            <option value="easy">Kolay</option>
+            <option value="medium">Orta</option>
+            <option value="hard">Zor</option>
+        </select>
+    </div>
+
+    <div class="scoreboard">
+        <div class="score">
+            <h2 class="x">X</h2>
+            <p id="playerX">Sen</p>
+            <h2 id="scoreX">0</h2>
+        </div>
+
+        <div class="score">
+            <h2 class="o">O</h2>
+            <p id="playerO">Bilgisayar</p>
+            <h2 id="scoreO">0</h2>
+        </div>
+    </div>
+
+    <div class="status" id="status">
+        Sıra Sende!
+    </div>
+
+    <div class="board" id="board"></div>
+
+    <button class="action" id="restart">
+        Yeniden Oyna
+    </button>
+
+    <button class="action secondary" id="resetScores">
+        Skorları Sıfırla
+    </button>
+
+    <div class="footer">
+        Soos! Game
+    </div>
+
+</div>
+
+<script>
+const boardElement = document.getElementById("board");
+const statusElement = document.getElementById("status");
+const modeElement = document.getElementById("mode");
+const difficultyElement = document.getElementById("difficulty");
+
+let board = Array(9).fill("");
+let currentPlayer = "X";
+let gameOver = false;
+let thinking = false;
+let timer = null;
+
+let scoreX = 0;
+let scoreO = 0;
+
+const winningLines = [
+    [0, 1, 2],
+    [3, 4, 5],
+    [6, 7, 8],
+    [0, 3, 6],
+    [1, 4, 7],
+    [2, 5, 8],
+    [0, 4, 8],
+    [2, 4, 6]
+];
+
+// Skorları yükle
+try {
+    const saved = JSON.parse(
+        localStorage.getItem("soosScores")
+    );
+
+    if (saved) {
+        scoreX = Number(saved.x) || 0;
+        scoreO = Number(saved.o) || 0;
+    }
+} catch (error) {
+    console.log("Skorlar yüklenemedi.");
+}
+
+function updateScores() {
+    document.getElementById("scoreX").textContent = scoreX;
+    document.getElementById("scoreO").textContent = scoreO;
+
+    try {
+        localStorage.setItem(
+            "soosScores",
+            JSON.stringify({ x: scoreX, o: scoreO })
+        );
+    } catch (error) {
+        console.log("Skorlar kaydedilemedi.");
+    }
+}
+
+function createBoard() {
+    boardElement.innerHTML = "";
+
+    for (let i = 0; i < 9; i++) {
+        const cell = document.createElement("button");
+
+        cell.className = "cell";
+        cell.setAttribute("aria-label", "Kare " + (i + 1));
+
+        cell.addEventListener("click", () => {
+            playerMove(i);
+        });
+
+        boardElement.appendChild(cell);
+    }
+
+    renderBoard();
+}
+
+function renderBoard() {
+    const cells = boardElement.children;
+
+    for (let i = 0; i < 9; i++) {
+        cells[i].textContent = board[i];
+        cells[i].className = "cell";
+
+        if (board[i] === "X") {
+            cells[i].classList.add("x");
+        }
+
+        if (board[i] === "O") {
+            cells[i].classList.add("o");
+        }
+    }
+}
+
+function getWinner(state) {
+    for (const line of winningLines) {
+        const [a, b, c] = line;
+
+        if (
+            state[a] !== "" &&
+            state[a] === state[b] &&
+            state[b] === state[c]
+        ) {
+            return {
+                player: state[a],
+                line: line
+            };
+        }
+    }
+
+    return null;
+}
+
+function getEmptyCells(state) {
+    return state
+        .map((value, index) => value === "" ? index : -1)
+        .filter(index => index !== -1);
+}
+
+function playerMove(index) {
+    if (
+        gameOver ||
+        thinking ||
+        board[index] !== ""
+    ) {
+        return;
+    }
+
+    board[index] = currentPlayer;
+    renderBoard();
+
+    if (checkGameEnd()) return;
+
+    if (modeElement.value === "friend") {
+        currentPlayer = currentPlayer === "X" ? "O" : "X";
+        statusElement.textContent =
+            "Sıra " + currentPlayer + " Oyuncusunda!";
+    } else {
+        thinking = true;
+        statusElement.textContent = "Bilgisayar düşünüyor...";
+
+        timer = setTimeout(() => {
+            timer = null;
+            computerMove();
+        }, 450);
+    }
+}
+
+function computerMove() {
+    if (gameOver || modeElement.value !== "computer") {
+        thinking = false;
+        return;
+    }
+
+    const empty = getEmptyCells(board);
+
+    if (empty.length === 0) {
+        thinking = false;
+        return;
+    }
+
+    let move;
+
+    if (difficultyElement.value === "easy") {
+        move = randomMove();
+    } else if (difficultyElement.value === "medium") {
+        move = mediumMove();
+    } else {
+        move = hardMove();
+    }
+
+    board[move] = "O";
+    thinking = false;
+
+    renderBoard();
+
+    if (!checkGameEnd()) {
+        currentPlayer = "X";
+        statusElement.textContent = "Sıra Sende!";
+    }
+}
+
+function randomMove() {
+    const empty = getEmptyCells(board);
+
+    return empty[Math.floor(Math.random() * empty.length)];
+}
+
+function findWinningMove(player) {
+    for (const index of getEmptyCells(board)) {
+        board[index] = player;
+
+        const result = getWinner(board);
+
+        board[index] = "";
+
+        if (result && result.player === player) {
+            return index;
+        }
+    }
+
+    return null;
+}
+
+// Orta seviye
+function mediumMove() {
+    const winning = findWinningMove("O");
+
+    if (winning !== null) {
+        return winning;
+    }
+
+    const blocking = findWinningMove("X");
+
+    if (blocking !== null) {
+        return blocking;
+    }
+
+    if (board[4] === "") {
+        return 4;
+    }
+
+    return randomMove();
+}
+
+// Zor seviye: Minimax
+function minimax(state, depth, maximizing) {
+    const winner = getWinner(state);
+
+    if (winner) {
+        return winner.player === "O"
+            ? 10 - depth
+            : depth - 10;
+    }
+
+    if (getEmptyCells(state).length === 0) {
+        return 0;
+    }
+
+    if (maximizing) {
+        let best = -Infinity;
+
+        for (const index of getEmptyCells(state)) {
+            state[index] = "O";
+
+            const score = minimax(
+                state,
+                depth + 1,
+                false
+            );
+
+            state[index] = "";
+            best = Math.max(best, score);
+        }
+
+        return best;
+    } else {
+        let best = Infinity;
+
+        for (const index of getEmptyCells(state)) {
+            state[index] = "X";
+
+            const score = minimax(
+                state,
+                depth + 1,
+                true
+            );
+
+            state[index] = "";
+            best = Math.min(best, score);
+        }
+
+        return best;
+    }
+}
+
+function hardMove() {
+    let bestScore = -Infinity;
+    let bestIndex = -1;
+
+    for (const index of getEmptyCells(board)) {
+        board[index] = "O";
+
+        const score = minimax(
+            board,
+            0,
+            false
+        );
+
+        board[index] = "";
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestIndex = index;
+        }
+    }
+
+    return bestIndex;
+}
+
+function checkGameEnd() {
+    const winner = getWinner(board);
+
+    if (winner) {
+        gameOver = true;
+
+        if (winner.player === "X") {
+            scoreX++;
+        } else {
+            scoreO++;
+        }
+
+        updateScores();
+
+        const cells = boardElement.children;
+
+        winner.line.forEach(index => {
+            cells[index].classList.add("win");
+        });
+
+        if (modeElement.value === "computer") {
+            statusElement.textContent =
+                winner.player === "X"
+                    ? "Tebrikler! Kazandın! 🎉"
+                    : "Bilgisayar Kazandı!";
+        } else {
+            statusElement.textContent =
+                winner.player + " Oyuncusu Kazandı!";
+        }
+
+        return true;
+    }
+
+    if (getEmptyCells(board).length === 0) {
+        gameOver = true;
+        statusElement.textContent = "Berabere!";
+        return true;
+    }
+
+    return false;
+}
+
+function resetGame() {
+    if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+    }
+
+    board = Array(9).fill("");
+    currentPlayer = "X";
+    gameOver = false;
+    thinking = false;
+
+    statusElement.textContent =
+        modeElement.value === "computer"
+            ? "Sıra Sende!"
+            : "Sıra X Oyuncusunda!";
+
+    renderBoard();
+}
+
+function updateMode() {
+    const isComputer = modeElement.value === "computer";
+
+    difficultyElement.disabled = !isComputer;
+    difficultyElement.style.opacity = isComputer ? "1" : "0.5";
+
+    document.getElementById("playerX").textContent =
+        isComputer ? "Sen" : "Oyuncu 1";
+
+    document.getElementById("playerO").textContent =
+        isComputer ? "Bilgisayar" : "Oyuncu 2";
+
+    scoreX = 0;
+    scoreO = 0;
+
+    updateScores();
+    resetGame();
+}
+
+document.getElementById("restart")
+    .addEventListener("click", resetGame);
+
+document.getElementById("resetScores")
+    .addEventListener("click", () => {
+        scoreX = 0;
+        scoreO = 0;
+
+        updateScores();
+        resetGame();
+    });
+
+modeElement.addEventListener("change", updateMode);
+
+difficultyElement.addEventListener("change", resetGame);
+
+createBoard();
+updateScores();
+</script>
+
+</body>
+</html>
